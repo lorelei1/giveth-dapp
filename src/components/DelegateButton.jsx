@@ -164,7 +164,7 @@ class DelegateButton extends Component {
                 max={Number(this.state.maxAmount)}
                 step={this.state.maxAmount / 10}
                 value={Number(this.state.amount)}
-                labels={['0', this.state.maxAmount]}
+                labels={{ 0: '0', [this.state.maxAmount]: this.state.maxAmount }}
                 format={val => `${val} ETH`}
                 onChange={amount => this.setState({ amount: Number(amount).toFixed(2) })}
               />

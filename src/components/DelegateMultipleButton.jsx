@@ -3,9 +3,10 @@ import { SkyLightStateless } from 'react-skylight';
 import { utils } from 'web3';
 import { Form, Input } from 'formsy-react-components';
 import PropTypes from 'prop-types';
-import 'react-rangeslider/lib/index.css';
 import { paramsForServer } from 'feathers-hooks-common';
-import Pagination from 'react-js-pagination';
+import Slider from 'react-rangeslider';
+import 'react-rangeslider/lib/index.css';
+import BigNumber from 'bignumber.js';
 
 import { checkWalletBalance } from '../lib/middleware';
 import { feathersClient } from '../lib/feathersClient';
@@ -16,8 +17,17 @@ import Donation from '../models/Donation';
 import Campaign from '../models/Campaign';
 import User from '../models/User';
 
-// import DonationService from '../services/DonationService';
+BigNumber.config({ DECIMAL_PLACES: 18 });
 
+/**
+ * Retrieves the oldest 100 donations that can the user delegate
+ *
+ * @prop {GivethWallet} wallet      Wallet object
+ * @prop {User}         currentUser Current user of the Dapp
+ * @prop {Campaign}     campaign    If the delegation is towards campaign, this contains the campaign
+ * @prop {Object}       milestone   It the delegation is towards campaign, this contains the milestone
+ * @prop {Object}       style       Styles added to the button
+ */
 class DelegateMultipleButton extends Component {
   constructor(props) {
     super(props);
@@ -26,10 +36,7 @@ class DelegateMultipleButton extends Component {
       isSaving: false,
       modalVisible: false,
       delegations: [],
-      visiblePages: 10,
-      itemsPerPage: 100,
-      skipPages: 0,
-      totalResults: 0,
+      maxAmount: 0,
     };
 
     this.loadDonations = this.loadDonations.bind(this);
@@ -46,22 +53,24 @@ class DelegateMultipleButton extends Component {
           $select: ['ownerAddress', 'title', '_id', 'delegateId'],
         },
       })
-      .subscribe(this.loadDonations, () => {});
+      .subscribe(
+        resp =>
+          this.loadDonations(
+            resp.data.map(c => ({
+              name: c.title,
+              id: c._id, // eslint-disable-line no-underscore-dangle
+            })),
+          ),
+        () => {},
+      );
   }
 
   handlePageChanged(newPage) {
     this.setState({ skipPages: newPage - 1 }, () => this.loadDonations());
   }
 
-  loadDonations(resp) {
+  loadDonations(dacs) {
     if (this.donationsObserver) this.donationsObserver.unsubscribe();
-
-    const dacs = resp
-      ? resp.data.map(c => ({
-          name: c.title,
-          id: c._id, // eslint-disable-line no-underscore-dangle
-        }))
-      : this.state.dacs;
 
     const $or = [
       { delegateId: { $in: dacs.map(d => d.id) } },
@@ -95,13 +104,17 @@ class DelegateMultipleButton extends Component {
       .find(query)
       .subscribe(
         r => {
+          const delegations = r.data.map(d => new Donation(d));
+          const amount = utils.fromWei(
+            delegations
+              .reduce((sum, d) => sum.plus(new BigNumber(d.amount)), new BigNumber('0'))
+              .toString(),
+          );
           this.setState({
-            dacs,
-            delegations: r.data.map(d => new Donation(d)),
+            delegations,
             isLoading: false,
-            itemsPerPage: resp.limit,
-            skipPages: resp.skip,
-            totalResults: resp.total,
+            maxAmount: amount,
+            amount,
           });
         },
         () => this.setState({ isLoading: false }),
@@ -115,6 +128,7 @@ class DelegateMultipleButton extends Component {
   submit(model) {
     this.setState({ isSaving: true });
     console.log(model);
+    console.log(this.state.delegations);
   }
 
   resetSkylight() {
@@ -125,15 +139,7 @@ class DelegateMultipleButton extends Component {
 
   render() {
     const style = { display: 'inline-block', ...this.props.style };
-    const {
-      skipPages,
-      itemsPerPage,
-      totalResults,
-      visiblePages,
-      delegations,
-      isSaving,
-      isLoading,
-    } = this.state;
+    const { isSaving, isLoading } = this.state;
     const { campaign, milestone } = this.props;
 
     return (
@@ -161,53 +167,47 @@ class DelegateMultipleButton extends Component {
             {campaign && <strong> {campaign.title}</strong>}
             {milestone && <strong> {milestone.campaign.title}</strong>}
           </p>
-          <Form onSubmit={this.submit} layout="vertical">
-            <div style={{ overflow: 'scroll', height: '400px' }}>
-              <span className="label">Please select donations to be delegated:</span>
+          {isLoading && <Loader className="small btn-loader" />}
+          {!isLoading && (
+            <Form onSubmit={this.submit} layout="vertical">
+              <span className="label">Amount to delegate:</span>
 
-              {isLoading && <Loader className="fixed" />}
-              {!isLoading && (
-                <table className="table table-responsive table-striped table-hover">
-                  <thead>
-                    <tr>
-                      <td>Owner Entity</td>
-                      <td>Amount</td>
-                      <td>To Donate</td>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {delegations.map(del => (
-                      <tr key={del.id}>
-                        <td>
-                          {del.donatedTo.type === 'DAC'
-                            ? del.delegateEntity.title
-                            : del.ownerEntity.title}
-                        </td>
-                        <td>{utils.fromWei(del.amount)}</td>
-                        <td>
-                          <Input name="amount[]" />
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-
-              <center>
-                <Pagination
-                  activePage={skipPages + 1}
-                  itemsCountPerPage={itemsPerPage}
-                  totalItemsCount={totalResults}
-                  pageRangeDisplayed={visiblePages}
-                  onChange={this.handlePageChanged}
+              <div className="form-group">
+                <Slider
+                  type="range"
+                  name="amount2"
+                  min={0}
+                  max={Number(this.state.maxAmount)}
+                  step={this.state.maxAmount / 10}
+                  value={Number(this.state.amount)}
+                  labels={{ 0: '0', [this.state.maxAmount]: this.state.maxAmount }}
+                  format={val => `${val} ETH`}
+                  onChange={amount => this.setState({ amount: Number(amount).toFixed(2) })}
                 />
-              </center>
-            </div>
+              </div>
 
-            <button className="btn btn-success" formNoValidate type="submit" disabled={isSaving}>
-              {isSaving ? 'Delegating...' : 'Delegate here'}
-            </button>
-          </Form>
+              <div className="form-group">
+                <Input
+                  type="text"
+                  validations={`greaterThan:0,isNumeric,lessOrEqualTo:${this.state.maxAmount}`}
+                  validationErrors={{
+                    greaterThan: 'Enter value greater than 0',
+                    lessOrEqualTo: `The donation you are delegating has value of ${
+                      this.state.maxAmount
+                    }. Do not input higher amount.`,
+                    isNumeric: 'Provide correct number',
+                  }}
+                  name="amount"
+                  value={this.state.amount}
+                  onChange={(name, amount) => this.setState({ amount })}
+                />
+              </div>
+
+              <button className="btn btn-success" formNoValidate type="submit" disabled={isSaving}>
+                {isSaving ? 'Delegating...' : 'Delegate here'}
+              </button>
+            </Form>
+          )}
         </SkyLightStateless>
       </span>
     );
