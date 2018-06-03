@@ -14,8 +14,7 @@ try {
       storeName: 'mystore',
       version: 3,
     })
-    .then(() => localForage.getItem('x'))
-    .then(x => console.log(x, localForage.driver()));
+    .then(() => localForage.getItem('x'));
 
   /* global document */
   ReactDOM.render(
@@ -25,5 +24,5 @@ try {
 
   registerServiceWorker();
 } catch (e) {
-  console.log(e);
+  console.error(e);
 }

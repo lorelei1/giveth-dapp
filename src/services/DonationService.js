@@ -6,6 +6,7 @@ import { feathersClient } from '../lib/feathersClient';
 import { getWeb3 } from '../lib/blockchain/getWeb3';
 
 import ErrorPopup from '../components/ErrorPopup';
+// import Campaign from '../models/Campaign';
 
 // TODO: Remove in future
 /* eslint no-underscore-dangle: 0 */

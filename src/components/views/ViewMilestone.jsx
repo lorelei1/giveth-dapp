@@ -21,6 +21,7 @@ import getNetwork from './../../lib/blockchain/getNetwork';
 import { feathersClient } from './../../lib/feathersClient';
 import Loader from './../Loader';
 import MilestoneItem from './../MilestoneItem';
+import DelegateMultipleButton from '../DelegateMultipleButton';
 
 /**
   Loads and shows a single milestone
@@ -189,13 +190,41 @@ class ViewMilestone extends Component {
               <p>Campaign: {campaign.title} </p>
 
               {this.isActiveMilestone() && (
-                <DonateButton
-                  type="milestone"
-                  model={{ title, id, adminId: projectId }}
-                  wallet={wallet}
-                  currentUser={currentUser}
-                  history={history}
-                />
+                <div>
+                  <DonateButton
+                    type="milestone"
+                    model={{ title, id, adminId: projectId }}
+                    wallet={wallet}
+                    currentUser={currentUser}
+                    history={history}
+                  />
+                  <DelegateMultipleButton
+                    style={{ padding: '10px 10px' }}
+                    milestone={{
+                      id,
+                      projectId,
+                      title,
+                      ownerAddress,
+                      owner,
+                      maxAmount,
+                      totalDonated,
+                      recipient,
+                      recipientAddress,
+                      reviewer,
+                      reviewerAddress,
+                      etherScanUrl,
+                      items,
+                      date,
+                      status,
+                      fiatAmount,
+                      selectedFiatType,
+                      campaign,
+                      campaignOwnerAddress,
+                    }}
+                    wallet={wallet}
+                    currentUser={currentUser}
+                  />
+                </div>
               )}
             </BackgroundImageHeader>
 
