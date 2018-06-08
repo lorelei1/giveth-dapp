@@ -7,6 +7,7 @@ import { paramsForServer } from 'feathers-hooks-common';
 import Slider from 'react-rangeslider';
 import 'react-rangeslider/lib/index.css';
 import BigNumber from 'bignumber.js';
+import InputToken from 'react-input-token';
 
 import { checkWalletBalance } from '../lib/middleware';
 import { feathersClient } from '../lib/feathersClient';
@@ -16,6 +17,8 @@ import Loader from './Loader';
 import Donation from '../models/Donation';
 import Campaign from '../models/Campaign';
 import User from '../models/User';
+
+import DonationService from '../services/DonationService';
 
 BigNumber.config({ DECIMAL_PLACES: 18 });
 
@@ -34,12 +37,16 @@ class DelegateMultipleButton extends Component {
 
     this.state = {
       isSaving: false,
+      isLoadingDonations: true,
       modalVisible: false,
       delegations: [],
       maxAmount: 0,
+      dacs: [],
+      objectToDelegateFrom: [],
     };
 
     this.loadDonations = this.loadDonations.bind(this);
+    this.selectedObject = this.selectedObject.bind(this);
   }
 
   componentDidMount() {
@@ -55,38 +62,49 @@ class DelegateMultipleButton extends Component {
       })
       .subscribe(
         resp =>
-          this.loadDonations(
-            resp.data.map(c => ({
+          this.setState({
+            dacs: resp.data.map(c => ({
               name: c.title,
               id: c._id, // eslint-disable-line no-underscore-dangle
+              ownerAddress: c.ownerAddress,
+              delegateId: c.delegateId,
+              type: 'dac',
             })),
-          ),
+          }),
         () => {},
       );
+  }
+
+  selectedObject({ target }) {
+    this.setState({ objectToDelegateFrom: target.value, isLoadingDonations: true });
+    this.loadDonations(target.value);
   }
 
   handlePageChanged(newPage) {
     this.setState({ skipPages: newPage - 1 }, () => this.loadDonations());
   }
 
-  loadDonations(dacs) {
+  loadDonations(entity) {
     if (this.donationsObserver) this.donationsObserver.unsubscribe();
 
-    const $or = [
-      { delegateId: { $in: dacs.map(d => d.id) } },
-      {
-        ownerId: this.props.currentUser.address,
-        $not: { delegateId: { $gt: '0' } },
-      },
-    ];
+    const options = {};
+    if (entity.type === 'dac') {
+      options.$or = [
+        { delegateId: entity.id },
+        {
+          ownerId: this.props.currentUser.address,
+          $not: { delegateId: { $gt: '0' } },
+        },
+      ];
+    }
 
     if (this.props.milestone) {
-      $or.push({ ownerId: this.props.milestone.campaign._id }); // eslint-disable-line
+      options.ownerId = this.props.milestone.campaign._id; // eslint-disable-line
     }
 
     const query = paramsForServer({
       query: {
-        $or,
+        ...options,
         status: {
           $in: ['waiting', 'committed'],
         },
@@ -112,12 +130,12 @@ class DelegateMultipleButton extends Component {
           );
           this.setState({
             delegations,
-            isLoading: false,
             maxAmount: amount,
             amount,
+            isLoadingDonations: false,
           });
         },
-        () => this.setState({ isLoading: false }),
+        () => this.setState({ isLoadingDonations: false }),
       );
   }
 
@@ -127,8 +145,46 @@ class DelegateMultipleButton extends Component {
 
   submit(model) {
     this.setState({ isSaving: true });
-    console.log(model);
-    console.log(this.state.delegations);
+
+    const onCreated = txLink => {
+      this.resetSkylight();
+
+      React.swal({
+        title: 'Delegated!',
+        content: React.swal.msg(
+          <p>
+            The donations have been delegated,{' '}
+            <a href={`${txLink}`} target="_blank" rel="noopener noreferrer">
+              view the transaction here.
+            </a>
+            <p>
+              The donations have been delegated. Please note the the Giver may have{' '}
+              <strong>3 days</strong> to reject your delegation before the money gets committed.
+            </p>
+          </p>,
+        ),
+        icon: 'success',
+      });
+    };
+
+    const onSuccess = txLink => {
+      React.toast.success(
+        <p>
+          Your donation has been confirmed!<br />
+          <a href={`${txLink}`} target="_blank" rel="noopener noreferrer">
+            View transaction
+          </a>
+        </p>,
+      );
+    };
+
+    DonationService.delegateMultiple(
+      this.state.delegations,
+      utils.toWei(model.amount),
+      this.props.campaign || this.props.milestone,
+      onCreated,
+      onSuccess,
+    );
   }
 
   resetSkylight() {
@@ -139,8 +195,14 @@ class DelegateMultipleButton extends Component {
 
   render() {
     const style = { display: 'inline-block', ...this.props.style };
-    const { isSaving, isLoading } = this.state;
+    const { isSaving, isLoading, dacs, delegations, isLoadingDonations } = this.state;
     const { campaign, milestone } = this.props;
+    const options = this.props.milestone
+      ? dacs.concat([
+          // eslint-disable-next-line no-underscore-dangle
+          { id: milestone.campaign._id, name: milestone.campaign.title, type: 'campaign' },
+        ])
+      : dacs;
 
     return (
       <span style={style}>
@@ -170,42 +232,84 @@ class DelegateMultipleButton extends Component {
           {isLoading && <Loader className="small btn-loader" />}
           {!isLoading && (
             <Form onSubmit={this.submit} layout="vertical">
-              <span className="label">Amount to delegate:</span>
-
               <div className="form-group">
-                <Slider
-                  type="range"
-                  name="amount2"
-                  min={0}
-                  max={Number(this.state.maxAmount)}
-                  step={this.state.maxAmount / 10}
-                  value={Number(this.state.amount)}
-                  labels={{ 0: '0', [this.state.maxAmount]: this.state.maxAmount }}
-                  format={val => `${val} ETH`}
-                  onChange={amount => this.setState({ amount: Number(amount).toFixed(2) })}
+                <span className="label">Delegate from:</span>
+                <InputToken
+                  name="delegateFrom"
+                  label="Delegate from:"
+                  placeholder={this.props.campaign ? 'Select a DAC' : 'Select a DAC or Campaign'}
+                  value={this.state.objectToDelegateFrom}
+                  options={options}
+                  onSelect={this.selectedObject}
+                  maxLength={1}
                 />
               </div>
 
-              <div className="form-group">
-                <Input
-                  type="text"
-                  validations={`greaterThan:0,isNumeric,lessOrEqualTo:${this.state.maxAmount}`}
-                  validationErrors={{
-                    greaterThan: 'Enter value greater than 0',
-                    lessOrEqualTo: `The donation you are delegating has value of ${
-                      this.state.maxAmount
-                    }. Do not input higher amount.`,
-                    isNumeric: 'Provide correct number',
-                  }}
-                  name="amount"
-                  value={this.state.amount}
-                  onChange={(name, amount) => this.setState({ amount })}
-                />
-              </div>
+              {this.state.objectToDelegateFrom.length !== 1 && (
+                <p>
+                  Please select entity from which you want to delegate money to the{' '}
+                  {campaign ? campaign.title : milestone.title}{' '}
+                </p>
+              )}
+              {this.state.objectToDelegateFrom.length === 1 &&
+                isLoadingDonations && <Loader className="small btn-loader" />}
+              {this.state.objectToDelegateFrom.length === 1 &&
+                !isLoadingDonations &&
+                delegations.length === 0 && (
+                  <p>
+                    There are no delegations in the DAC or Campaign you have selected that can be
+                    delegated.
+                  </p>
+                )}
+              {this.state.objectToDelegateFrom.length === 1 &&
+                !isLoadingDonations &&
+                delegations.length > 0 && (
+                  <div>
+                    <span className="label">Amount to delegate:</span>
 
-              <button className="btn btn-success" formNoValidate type="submit" disabled={isSaving}>
-                {isSaving ? 'Delegating...' : 'Delegate here'}
-              </button>
+                    <div className="form-group">
+                      <Slider
+                        type="range"
+                        name="amount2"
+                        min={0}
+                        max={Number(this.state.maxAmount)}
+                        step={this.state.maxAmount / 10}
+                        value={Number(this.state.amount)}
+                        labels={{ 0: '0', [this.state.maxAmount]: this.state.maxAmount }}
+                        format={val => `${val} ETH`}
+                        onChange={amount => this.setState({ amount: Number(amount).toFixed(2) })}
+                      />
+                    </div>
+
+                    <div className="form-group">
+                      <Input
+                        type="text"
+                        validations={`greaterThan:0,isNumeric,lessOrEqualTo:${
+                          this.state.maxAmount
+                        }`}
+                        validationErrors={{
+                          greaterThan: 'Enter value greater than 0',
+                          lessOrEqualTo: `The donation you are delegating has value of ${
+                            this.state.maxAmount
+                          }. Do not input higher amount.`,
+                          isNumeric: 'Provide correct number',
+                        }}
+                        name="amount"
+                        value={this.state.amount}
+                        onChange={(name, amount) => this.setState({ amount })}
+                      />
+                    </div>
+
+                    <button
+                      className="btn btn-success"
+                      formNoValidate
+                      type="submit"
+                      disabled={isSaving}
+                    >
+                      {isSaving ? 'Delegating...' : 'Delegate here'}
+                    </button>
+                  </div>
+                )}
             </Form>
           )}
         </SkyLightStateless>
