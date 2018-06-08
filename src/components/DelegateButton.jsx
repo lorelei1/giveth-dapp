@@ -110,7 +110,7 @@ class DelegateButton extends Component {
     const { types, milestoneOnly, donation } = this.props;
     const { isSaving, objectsToDelegateTo } = this.state;
     const style = { display: 'inline-block' };
-    const pStyle = { 'white-space': 'normal' };
+    const pStyle = { whiteSpace: 'normal' };
 
     return (
       <span style={style}>

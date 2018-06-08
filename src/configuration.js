@@ -10,6 +10,7 @@ const {
   REACT_APP_TOKEN_ADDRESSES,
   REACT_APP_BLOCKEXPLORER,
   REACT_APP_BUGS_EMAIL = 'bugs@giveth.io',
+  REACT_APP_DEFAULT_GASPRICE = 10,
 } = process.env;
 
 const configurations = {
@@ -25,7 +26,7 @@ const configurations = {
     etherscan: 'https://etherscan.io/', // this won't work, only here so we can see links during development
     foreignEtherscan: 'https://ropsten.etherscan.io/', // this won't work, only here so we can see links during development
     feathersConnection: 'http://localhost:3030',
-    foreignNodeConnection: 'ws://localhost:8546',
+    foreignNodeConnection: 'http://localhost:8546',
     foreignNetworkName: 'Foreign Ganache',
     homeNodeConnection: 'http://localhost:8545',
     homeNetworkName: 'Home Ganache',
@@ -44,7 +45,7 @@ const configurations = {
     feathersConnection: 'https://feathers.develop.giveth.io',
     foreignNodeConnection: 'https://rinkeby.giveth.io',
     foreignNetworkName: 'Rinkeby',
-    homeNodeConnection: 'https://ropsten.infura.io/Id3GoVvLrsO08ZNjxiKz',
+    homeNodeConnection: 'https://ropsten.giveth.io',
     homeNetworkName: 'Ropsten',
   },
   release: {
@@ -57,15 +58,15 @@ const configurations = {
     etherscan: 'https://rinkeby.etherscan.io/',
     foreignEtherscan: 'https://ropsten.etherscan.io/',
     feathersConnection: 'https://feathers.release.giveth.io',
-    foreignNodeConnection: 'wss://rinkeby.giveth.io:8546',
-    homeNodeConnection: 'https://ropsten.infura.io/Id3GoVvLrsO08ZNjxiKz',
+    foreignNodeConnection: 'https://rinkeby.giveth.io',
+    homeNodeConnection: 'https://ropsten.giveth.io',
   },
   mainnet: {
     title: 'mainnet',
     etherscan: 'https://etherscan.io/',
     feathersConnection: 'https://feathers.mainnet.giveth.io',
-    foreignNodeConnection: 'wss://mew.giveth.io/ws',
-    homeNodeConnection: 'https://ropsten.infura.io/Id3GoVvLrsO08ZNjxiKz',
+    foreignNodeConnection: 'https://rinkeby.giveth.io',
+    homeNodeConnection: 'https://mew.giveth.io',
   },
   alpha: {
     title: 'alpha',
@@ -77,8 +78,8 @@ const configurations = {
     etherscan: 'https://rinkeby.etherscan.io/',
     foreignEtherscan: 'https://ropsten.etherscan.io/',
     feathersConnection: 'https://feathers.alpha.giveth.io',
-    foreignNodeConnection: 'wss://rinkeby.giveth.io:8546',
-    homeNodeConnection: 'https://ropsten.infura.io/Id3GoVvLrsO08ZNjxiKz',
+    foreignNodeConnection: 'https://rinkeby.giveth.io',
+    homeNodeConnection: 'https://ropsten.giveth.io',
   },
 };
 
@@ -108,6 +109,7 @@ config.feathersConnection = REACT_APP_FEATHERJS_CONNECTION_URL || config.feather
 config.foreignNodeConnection = REACT_APP_ETH_NODE_CONNECTION_URL || config.foreignNodeConnection;
 config.decimals = REACT_APP_DECIMALS;
 config.bugsEmail = REACT_APP_BUGS_EMAIL;
+config.defaultGasPrice = REACT_APP_DEFAULT_GASPRICE;
 config.sendErrors = ['develop', 'release', 'alpha', 'mainnet'].includes(REACT_APP_ENVIRONMENT);
 
 export default config;
