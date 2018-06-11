@@ -41,12 +41,13 @@ class DelegateMultipleButton extends Component {
       modalVisible: false,
       delegations: [],
       maxAmount: 0,
-      dacs: [],
+      delegationOptions: [],
       objectToDelegateFrom: [],
     };
 
     this.loadDonations = this.loadDonations.bind(this);
     this.selectedObject = this.selectedObject.bind(this);
+    this.submit = this.submit.bind(this);
   }
 
   componentDidMount() {
@@ -57,20 +58,34 @@ class DelegateMultipleButton extends Component {
         query: {
           delegateId: { $gt: '0' },
           ownerAddress: this.props.currentUser.address,
-          $select: ['ownerAddress', 'title', '_id', 'delegateId'],
+          $select: ['ownerAddress', 'title', '_id', 'delegateId', 'delegateEntity', 'delegate'],
         },
       })
       .subscribe(
-        resp =>
-          this.setState({
-            dacs: resp.data.map(c => ({
-              name: c.title,
-              id: c._id, // eslint-disable-line no-underscore-dangle
-              ownerAddress: c.ownerAddress,
-              delegateId: c.delegateId,
-              type: 'dac',
-            })),
-          }),
+        resp => {
+          const dacs = resp.data.map(c => ({
+            name: c.title,
+            id: c._id,
+            ownerAddress: c.ownerAddress,
+            delegateId: c.delegateId,
+            delegateEntity: c.delegateEntity,
+            delegate: c.delegate,
+            type: 'dac',
+          }));
+
+          const delegationOptions = this.props.milestone
+            ? dacs.concat([
+                {
+                  id: this.props.milestone.campaign._id,
+                  name: this.props.milestone.campaign.title,
+                  ownerEntity: this.props.milestone.ownerEntity,
+                  type: 'campaign',
+                },
+              ])
+            : dacs;
+
+          this.setState({ delegationOptions });
+        },
         () => {},
       );
   }
@@ -84,22 +99,30 @@ class DelegateMultipleButton extends Component {
     this.setState({ skipPages: newPage - 1 }, () => this.loadDonations());
   }
 
-  loadDonations(entity) {
+  loadDonations(ids) {
+    if (ids.length !== 1) return;
+
+    const entity = this.state.delegationOptions.find(c => c.id === ids[0]);
+
     if (this.donationsObserver) this.donationsObserver.unsubscribe();
 
     const options = {};
-    if (entity.type === 'dac') {
-      options.$or = [
-        { delegateId: entity.id },
-        {
-          ownerId: this.props.currentUser.address,
-          $not: { delegateId: { $gt: '0' } },
-        },
-      ];
-    }
 
-    if (this.props.milestone) {
-      options.ownerId = this.props.milestone.campaign._id; // eslint-disable-line
+    switch (entity.type) {
+      case 'dac':
+        options.$or = [
+          { delegateId: entity.id },
+          {
+            ownerId: this.props.currentUser.address,
+            $not: { delegateId: { $gt: '0' } },
+          },
+        ];
+        break;
+      case 'campaign':
+        options.ownerId = entity.id;
+        break;
+      default:
+        break;
     }
 
     const query = paramsForServer({
@@ -152,7 +175,7 @@ class DelegateMultipleButton extends Component {
       React.swal({
         title: 'Delegated!',
         content: React.swal.msg(
-          <p>
+          <span>
             The donations have been delegated,{' '}
             <a href={`${txLink}`} target="_blank" rel="noopener noreferrer">
               view the transaction here.
@@ -161,7 +184,7 @@ class DelegateMultipleButton extends Component {
               The donations have been delegated. Please note the the Giver may have{' '}
               <strong>3 days</strong> to reject your delegation before the money gets committed.
             </p>
-          </p>,
+          </span>,
         ),
         icon: 'success',
       });
@@ -195,14 +218,8 @@ class DelegateMultipleButton extends Component {
 
   render() {
     const style = { display: 'inline-block', ...this.props.style };
-    const { isSaving, isLoading, dacs, delegations, isLoadingDonations } = this.state;
+    const { isSaving, isLoading, delegationOptions, delegations, isLoadingDonations } = this.state;
     const { campaign, milestone } = this.props;
-    const options = this.props.milestone
-      ? dacs.concat([
-          // eslint-disable-next-line no-underscore-dangle
-          { id: milestone.campaign._id, name: milestone.campaign.title, type: 'campaign' },
-        ])
-      : dacs;
 
     return (
       <span style={style}>
@@ -239,7 +256,7 @@ class DelegateMultipleButton extends Component {
                   label="Delegate from:"
                   placeholder={this.props.campaign ? 'Select a DAC' : 'Select a DAC or Campaign'}
                   value={this.state.objectToDelegateFrom}
-                  options={options}
+                  options={delegationOptions}
                   onSelect={this.selectedObject}
                   maxLength={1}
                 />
