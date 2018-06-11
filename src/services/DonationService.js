@@ -31,7 +31,7 @@ class DonationService {
     onSuccess = () => {},
     onError = () => {},
   ) {
-    const { type } = donations[0];
+    const { ownerType } = donations[0];
     let txHash;
     let etherScanUrl;
     const pledgedDonations = [];
@@ -84,7 +84,7 @@ class DonationService {
         etherScanUrl = network.etherscan;
 
         const from =
-          type === 'dac'
+          ownerType === 'dac'
             ? donations[0].delegateEntity.ownerAddress
             : donations[0].ownerEntity.ownerAddress;
         // const senderId = type === 'dac' ? donations[0].delegate : donations[0].owner;
@@ -93,7 +93,7 @@ class DonationService {
         const executeTransfer = () => {
           let contract;
 
-          if (donations[0].type === 'dac') {
+          if (ownerType === 'campaign') {
             contract = new LPPCampaign(web3, donations[0].ownerEntity.pluginAddress);
           } else {
             contract = new LPPDac(web3, donations[0].delegateEntity.pluginAddress);
