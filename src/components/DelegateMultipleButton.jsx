@@ -213,6 +213,7 @@ class DelegateMultipleButton extends Component {
   resetSkylight() {
     this.setState({
       isSaving: false,
+      modalVisible: false,
     });
   }
 

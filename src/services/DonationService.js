@@ -31,11 +31,16 @@ class DonationService {
     onSuccess = () => {},
     onError = () => {},
   ) {
-    const { ownerType } = donations[0];
+    const { ownerType, ownerEntity, delegateEntity } = donations[0];
     let txHash;
     let etherScanUrl;
-    const pledgedDonations = [];
+    const pledgedDonations = []; // Donations that have been pledged and should be updated in feathers
 
+    /**
+     * Decide which pledges should be used and encodes them for the contracts
+     *
+     * @return {Array} Array of strings with encoded pledges to delegate
+     */
     const getPledges = () => {
       const maxAmount = new BigNumber(amount);
       let currentAmount = new BigNumber('0');
@@ -84,19 +89,18 @@ class DonationService {
         etherScanUrl = network.etherscan;
 
         const from =
-          ownerType === 'dac'
-            ? donations[0].delegateEntity.ownerAddress
-            : donations[0].ownerEntity.ownerAddress;
-        // const senderId = type === 'dac' ? donations[0].delegate : donations[0].owner;
+          ownerType.toLowerCase() === 'campaign'
+            ? ownerEntity.ownerAddress
+            : delegateEntity.ownerAddress;
         const receiverId = delegateTo.projectId;
 
         const executeTransfer = () => {
           let contract;
 
-          if (ownerType === 'campaign') {
-            contract = new LPPCampaign(web3, donations[0].ownerEntity.pluginAddress);
+          if (ownerType.toLowerCase() === 'campaign') {
+            contract = new LPPCampaign(web3, ownerEntity.pluginAddress);
           } else {
-            contract = new LPPDac(web3, donations[0].delegateEntity.pluginAddress);
+            contract = new LPPDac(web3, delegateEntity.pluginAddress);
           }
 
           return contract.mTransfer(pledges, receiverId, {
@@ -113,6 +117,7 @@ class DonationService {
               status: 'pending',
             };
 
+            // Update the delegated donations in feathers
             pledgedDonations.forEach(d => {
               if (d.fullyDonated) {
                 if (d.donation.ownerType.toLowerCase() === 'campaign') {
