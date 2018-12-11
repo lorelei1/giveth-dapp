@@ -233,7 +233,7 @@ class BaseDelegateMultipleButton extends Component {
               view the transaction here.
             </a>
             <p>
-              The donations have been delegated. Please note the the Giver may have{' '}
+              The donations have been delegated. Please note the the Giver has{' '}
               <strong>3 days</strong> to reject your delegation before the money gets committed.
             </p>
           </span>,
